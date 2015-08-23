@@ -1,0 +1,107 @@
+---
+title: "Activity Quality"
+author: "Created By Julio SOLANO"
+date: "August 21, 2015"
+output: html_document
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+## Executive Summary  
+In this report, we will predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+Question is can the appropriate activity quality (class A-E) be predicted?
+
+
+## Input Data
+```{r}
+url_raw_training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+file_training <- "pml-training.csv"
+
+#download.file(url=url_raw_training, destfile=file_dest_training, method="curl")
+url_raw_testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+file_testing <- "pml-testing.csv"
+
+#download.file(url=url_raw_testing, destfile=file_dest_testing, method="curl")
+
+# Import the data treating empty values as NA.
+training <- read.csv(file_training, na.strings=c("NA",""), header=TRUE)
+colnames_train <- colnames(training)
+testing <- read.csv(file_testing, na.strings=c("NA",""), header=TRUE)
+colnames_test <- colnames(testing)
+
+# Verify that the column names (excluding classe and problem_id) are identical in the training and test set
+all.equal(colnames_train[1:length(colnames_train)-1], colnames_test[1:length(colnames_train)-1])
+```
+
+## Data Cleaning 
+```{r}
+# Count the number of non-NAs in each col
+nonNAs <- function(x) {
+    as.vector(apply(x, 2, function(x) length(which(!is.na(x)))))
+}
+
+# Build vector of missing data or NA columns to drop
+colcnts <- nonNAs(training)
+drops <- c()
+for (cnt in 1:length(colcnts)) {
+    if (colcnts[cnt] < nrow(training)) {
+        drops <- c(drops, colnames_train[cnt])
+    }
+}
+
+# Drop NA data and the first 7 columns as they're unnecessary for predicting
+training <- training[,!(names(training) %in% drops)]
+training <- training[,8:length(colnames(training))]
+
+testing <- testing[,!(names(testing) %in% drops)]
+testing <- testing[,8:length(colnames(testing))]
+
+# Show remaining columns
+colnames(training)
+```
+
+## Features 
+```{r}
+library(caret)
+nsv <- nearZeroVar(training, saveMetrics = TRUE)
+nsv
+```
+
+Given that all of the near zero variance variables (nsv) are FALSE, there's no need to eliminate any covariates due to lack of variablility.
+
+## Algorithm
+
+We will split into a training set (comprising 60% of the entries) and a testing set (comprising 40% of the entries).
+
+```{r}
+library(rattle)
+set.seed(3143)
+fit1 <- train(classe ~ ., method="rf", trControl = trainControl(method = "cv", number = 3, verboseIter = FALSE), data = training)
+print(fit1, digits = 3)
+print(fit1$finalModel, digits=3)
+
+
+## Making Test Set Predictions
+
+# predict on test set
+pred <- predict(fit1, newdata = testing)
+
+# convert predictions to character vector
+pred <- as.character(pred)
+
+# create function to write predictions to files
+pml_write_files <- function(x) {
+    n <- length(x)
+    for(i in 1:n) {
+        filename <- paste0("problem_id_", i, ".txt")
+        write.table(x[i], file =filename, quote = F, row.names = F, col.names = F)
+    }
+}
+
+# create prediction files to submit
+pml_write_files(pred)
+```
+
